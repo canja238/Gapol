@@ -99,3 +99,19 @@ classdef PathFollowingRobot < handle
         end
     end
 end
+
+
+% Check available ports
+%>> serialportlist
+
+% Initialize robot (replace 'COM7' with your actual port)
+%>> robot = PathFollowingRobot('COM7');
+
+% Start the robot
+%>> robot.start();
+
+% To stop manually (optional)
+%>> robot.stop();
+
+%clear all;  % Clears existing port objects
+%instrreset; % Resets instrument connections
