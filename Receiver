@@ -1,21 +1,12 @@
 #include <SoftwareSerial.h>
 
-// HC-12 Wireless
 #define HC12_RX_PIN 10
 #define HC12_TX_PIN 11
 SoftwareSerial HC12_SERIAL(HC12_RX_PIN, HC12_TX_PIN);
 
-// GPS Data Structure
-struct GPSData {
-  float latitude;
-  float longitude;
-  float speed;
-  float course;
-};
-
 void setup() {
-  Serial.begin(115200);  // Communication with MATLAB
-  HC12_SERIAL.begin(9600); // Communication with robot
+  Serial.begin(115200);
+  HC12_SERIAL.begin(9600);
   
   pinMode(HC12_RX_PIN, INPUT);
   pinMode(HC12_TX_PIN, OUTPUT);
@@ -28,13 +19,27 @@ void loop() {
   if (HC12_SERIAL.available()) {
     String data = HC12_SERIAL.readStringUntil('\n');
     if (data.startsWith("GPS:")) {
-      Serial.println(data); // Send to MATLAB
+      // Validate GPS data format
+      int commas = 0;
+      for (int i = 0; i < data.length(); i++) {
+        if (data.charAt(i) == ',') commas++;
+      }
+      
+      if (commas == 3) {
+        Serial.println(data);
+      } else {
+        Serial.println("GPS:0,0,0,0"); // Send invalid data marker
+      }
     }
   }
   
-  // Forward motor commands from MATLAB to robot
+  // Forward commands from MATLAB to robot
   if (Serial.available()) {
     String command = Serial.readStringUntil('\n');
-    HC12_SERIAL.println(command); // Send to robot
+    if (command.startsWith("CMD:")) {
+      HC12_SERIAL.println(command);
+    }
   }
+  
+  delay(10);
 }
