@@ -1,8 +1,7 @@
 #include <TinyGPS++.h>
 #include <SoftwareSerial.h>
 
-// Debug Mode (uncomment for debugging)
-// #define DEBUG
+#define DEBUG
 
 #ifdef DEBUG
 #define DEBUG_PRINT(x) Serial.print(x)
@@ -12,45 +11,33 @@
 #define DEBUG_PRINTLN(x)
 #endif
 
-// GPS Module (NEO-M8N)
 TinyGPSPlus gps;
-#define GPS_SERIAL Serial1  // TX1=18, RX1=19
+#define GPS_SERIAL Serial1
+#define HC12_SERIAL Serial2
 
-// HC-12 Wireless
-#define HC12_SERIAL Serial2 // TX2=16, RX2=17
+const int ENA = 12;
+const int ENB = 13;
+const int motorPin1 = 8;
+const int motorPin2 = 9;
+const int motorPin3 = 11;
+const int motorPin4 = 10;
 
-// Motor Control (L293D)
-const int ENA = 12;  // PWM Left
-const int ENB = 13;  // PWM Right
-const int motorPin1 = 8;   // Left Dir1
-const int motorPin2 = 9;   // Left Dir2
-const int motorPin3 = 11;  // Right Dir1
-const int motorPin4 = 10;  // Right Dir2
-
-// System Parameters
-const float MAX_SPEED_MPS = 0.3333;  // Max linear speed (m/s)
-const float SPEED_50_PERCENT = 0.16665;
-const float SPEED_40_PERCENT = 0.13332;
-const float SPEED_30_PERCENT = 0.09999;
-const float DELTA_T = 0.775; // seconds
-const float DISTANCE_TRAVELED_DELTA_T = 0.1291925; // SPEED_50_PERCENT * DELTA_T
-
-// Control variables
 struct MotorCommand {
   int leftPWM;
   int rightPWM;
 };
 MotorCommand currentCommand = {0, 0};
+unsigned long lastCommandTime = 0;
+const unsigned long COMMAND_TIMEOUT = 2000; // 2 seconds
 
 void setup() {
   #ifdef DEBUG
   Serial.begin(115200);
   #endif
   
-  GPS_SERIAL.begin(9600);  // GPS module
-  HC12_SERIAL.begin(9600); // HC-12 module
+  GPS_SERIAL.begin(9600);
+  HC12_SERIAL.begin(9600);
   
-  // Motor control pins
   pinMode(ENA, OUTPUT);
   pinMode(ENB, OUTPUT);
   pinMode(motorPin1, OUTPUT);
@@ -65,30 +52,38 @@ void loop() {
   // Read GPS data
   while (GPS_SERIAL.available() > 0) {
     if (gps.encode(GPS_SERIAL.read())) {
-      if (gps.location.isValid()) {
+      if (gps.location.isValid() && gps.location.isUpdated()) {
         sendGPSData();
       }
     }
   }
   
-  // Check for incoming motor commands
-  if (HC12_SERIAL.available() >= sizeof(MotorCommand)) {
-    HC12_SERIAL.readBytes((byte*)&currentCommand, sizeof(MotorCommand));
-    executeMotorCommand();
+  // Check for incoming commands
+  if (HC12_SERIAL.available() > 0) {
+    String command = HC12_SERIAL.readStringUntil('\n');
+    if (command.startsWith("CMD:")) {
+      parseMotorCommand(command);
+      executeMotorCommand();
+      lastCommandTime = millis();
+    }
   }
   
-  // Small delay to prevent flooding
+  // Safety timeout - stop if no commands received
+  if (millis() - lastCommandTime > COMMAND_TIMEOUT) {
+    currentCommand = {0, 0};
+    executeMotorCommand();
+    DEBUG_PRINTLN("Command timeout - stopping");
+  }
+  
   delay(50);
 }
 
 void sendGPSData() {
-  // Package GPS data
   float latitude = gps.location.lat();
   float longitude = gps.location.lng();
   float speed = gps.speed.mps();
   float course = gps.course.deg();
   
-  // Send data via HC-12
   HC12_SERIAL.print("GPS:");
   HC12_SERIAL.print(latitude, 6);
   HC12_SERIAL.print(",");
@@ -98,14 +93,21 @@ void sendGPSData() {
   HC12_SERIAL.print(",");
   HC12_SERIAL.println(course, 2);
   
-  DEBUG_PRINT("Sent GPS: ");
+  DEBUG_PRINT("GPS: ");
   DEBUG_PRINT(latitude, 6);
   DEBUG_PRINT(", ");
   DEBUG_PRINTLN(longitude, 6);
 }
 
+void parseMotorCommand(String command) {
+  int commaIndex = command.indexOf(',', 4);
+  if (commaIndex != -1) {
+    currentCommand.leftPWM = command.substring(4, commaIndex).toInt();
+    currentCommand.rightPWM = command.substring(commaIndex + 1).toInt();
+  }
+}
+
 void executeMotorCommand() {
-  // Set motor directions based on PWM sign
   // Left motor
   if (currentCommand.leftPWM > 0) {
     digitalWrite(motorPin1, HIGH);
@@ -130,11 +132,10 @@ void executeMotorCommand() {
     digitalWrite(motorPin4, LOW);
   }
   
-  // Set PWM values (absolute value since direction is handled above)
-  analogWrite(ENA, abs(currentCommand.leftPWM) * 2.55); // Convert 0-100 to 0-255
-  analogWrite(ENB, abs(currentCommand.rightPWM) * 2.55);
+  analogWrite(ENA, constrain(abs(currentCommand.leftPWM) * 2.55, 0, 255));
+  analogWrite(ENB, constrain(abs(currentCommand.rightPWM) * 2.55, 0, 255));
   
-  DEBUG_PRINT("Motor Cmd: L=");
+  DEBUG_PRINT("Motors: L=");
   DEBUG_PRINT(currentCommand.leftPWM);
   DEBUG_PRINT(", R=");
   DEBUG_PRINTLN(currentCommand.rightPWM);
