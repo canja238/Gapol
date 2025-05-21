@@ -209,3 +209,10 @@ classdef PathFollowingRobot < handle
         end
     end
 end
+
+%serialportlist
+%robot = PathFollowingRobot('COM7');
+%robot.start();
+%robot.stop();
+%clear all; 
+%instrreset;
