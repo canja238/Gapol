@@ -1,0 +1,100 @@
+#include <SoftwareSerial.h>
+
+#define HC12_RX_PIN 10
+#define HC12_TX_PIN 11
+SoftwareSerial HC12_SERIAL(HC12_RX_PIN, HC12_TX_PIN);
+
+unsigned long gpsErrorCount = 0;
+unsigned long commandErrorCount = 0;
+
+void setup() {
+  Serial.begin(115200);
+  HC12_SERIAL.begin(9600);
+  
+  pinMode(HC12_RX_PIN, INPUT);
+  pinMode(HC12_TX_PIN, OUTPUT);
+  
+  Serial.println("Base Station Ready");
+}
+
+void loop() {
+  // Forward GPS data from robot to MATLAB
+  if (HC12_SERIAL.available()) {
+    String data = HC12_SERIAL.readStringUntil('\n');
+    data.trim();
+    
+    if (data.startsWith("GPS:")) {
+      // Enhanced validation
+      int commas = 0;
+      bool valid = true;
+      bool zeroPosition = false;
+      
+      for (int i = 0; i < data.length(); i++) {
+        if (data.charAt(i) == ',') commas++;
+      }
+      
+      // Parse values to check for zeros
+      int firstComma = data.indexOf(',');
+      int secondComma = data.indexOf(',', firstComma+1);
+      float lat = data.substring(4, firstComma).toFloat();
+      float lon = data.substring(firstComma+1, secondComma).toFloat();
+      
+      if (lat == 0.0 && lon == 0.0) {
+        zeroPosition = true;
+      }
+      
+      if (valid && commas == 3 && !zeroPosition) {
+        Serial.println(data);
+      } else {
+        gpsErrorCount++;
+        Serial.println("GPS:INVALID");
+        if (gpsErrorCount % 10 == 0) {
+          Serial.print("GPS Error Count: ");
+          Serial.println(gpsErrorCount);
+        }
+      }
+    }
+    else if (data.startsWith("GPS:LOST")) {
+      Serial.println("GPS:LOST");
+    }
+  }
+  
+  // Forward commands from MATLAB to robot
+  if (Serial.available()) {
+    String command = Serial.readStringUntil('\n');
+    command.trim();
+    
+    if (command.startsWith("CMD:")) {
+      // Enhanced validation
+      int commaPos = command.indexOf(',');
+      if (commaPos != -1 && commaPos > 4 && commaPos < command.length() - 1) {
+        String leftStr = command.substring(4, commaPos);
+        String rightStr = command.substring(commaPos + 1);
+        
+        // Validate numbers
+        bool validNumbers = true;
+        for (unsigned int i = 0; i < leftStr.length(); i++) {
+          if (!isdigit(leftStr.charAt(i)) && leftStr.charAt(i) != '-') validNumbers = false;
+        }
+        for (unsigned int i = 0; i < rightStr.length(); i++) {
+          if (!isdigit(rightStr.charAt(i)) && rightStr.charAt(i) != '-') validNumbers = false;
+        }
+        
+        if (validNumbers) {
+          HC12_SERIAL.println(command);
+        } else {
+          commandErrorCount++;
+        }
+      } else {
+        commandErrorCount++;
+      }
+      
+      if (commandErrorCount % 10 == 0) {
+        Serial.print("Command Error Count: ");
+        Serial.println(commandErrorCount);
+      }
+    }
+  }
+  
+  delay(10);
+}
