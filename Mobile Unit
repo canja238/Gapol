@@ -13,7 +13,7 @@
 
 TinyGPSPlus gps;
 #define GPS_SERIAL Serial1
-#define HC12_SERIAL Serial2
+#define HC12_SERIAL Serial3
 
 const int ENA = 12;
 const int ENB = 13;
@@ -29,6 +29,9 @@ struct MotorCommand {
 MotorCommand currentCommand = {0, 0};
 unsigned long lastCommandTime = 0;
 const unsigned long COMMAND_TIMEOUT = 2000; // 2 seconds
+const unsigned long GPS_TIMEOUT = 5000; // 5 seconds without GPS signal
+unsigned long lastValidGPS = 0;
+const int PWM_DEADZONE = 10; // Ignore PWM values below this threshold
 
 void setup() {
   #ifdef DEBUG
@@ -45,23 +48,41 @@ void setup() {
   pinMode(motorPin3, OUTPUT);
   pinMode(motorPin4, OUTPUT);
   
+  // Initialize motors in stopped state
+  stopMotors();
+  
   DEBUG_PRINTLN("Robot Initialized");
 }
 
 void loop() {
   // Read GPS data
+  bool gpsUpdated = false;
   while (GPS_SERIAL.available() > 0) {
     if (gps.encode(GPS_SERIAL.read())) {
       if (gps.location.isValid() && gps.location.isUpdated()) {
-        sendGPSData();
+        // Additional validation for GPS data
+        if (gps.location.lat() != 0.0 || gps.location.lng() != 0.0) {
+          gpsUpdated = true;
+          lastValidGPS = millis();
+          sendGPSData();
+        } else {
+          DEBUG_PRINTLN("Invalid GPS position (0,0) - ignoring");
+        }
       }
     }
+  }
+  
+  // Check for GPS timeout
+  if (millis() - lastValidGPS > GPS_TIMEOUT) {
+    DEBUG_PRINTLN("GPS signal lost");
+    HC12_SERIAL.println("GPS:LOST");
   }
   
   // Check for incoming commands
   if (HC12_SERIAL.available() > 0) {
     String command = HC12_SERIAL.readStringUntil('\n');
-    if (command.startsWith("CMD:")) {
+    command.trim();
+    if (validateCommand(command)) {
       parseMotorCommand(command);
       executeMotorCommand();
       lastCommandTime = millis();
@@ -71,18 +92,42 @@ void loop() {
   // Safety timeout - stop if no commands received
   if (millis() - lastCommandTime > COMMAND_TIMEOUT) {
     currentCommand = {0, 0};
-    executeMotorCommand();
+    stopMotors();
     DEBUG_PRINTLN("Command timeout - stopping");
   }
   
   delay(50);
 }
 
+bool validateCommand(String command) {
+  if (!command.startsWith("CMD:")) return false;
+  
+  int commaIndex = command.indexOf(',', 4);
+  if (commaIndex == -1) return false;
+  
+  String leftStr = command.substring(4, commaIndex);
+  String rightStr = command.substring(commaIndex + 1);
+  
+  // Check if strings are valid numbers
+  for (unsigned int i = 0; i < leftStr.length(); i++) {
+    if (!isdigit(leftStr.charAt(i)) && leftStr.charAt(i) != '-') return false;
+  }
+  for (unsigned int i = 0; i < rightStr.length(); i++) {
+    if (!isdigit(rightStr.charAt(i)) && rightStr.charAt(i) != '-') return false;
+  }
+  
+  return true;
+}
+
 void sendGPSData() {
+  if (!gps.location.isValid() || !gps.location.isUpdated()) {
+    return;
+  }
+  
   float latitude = gps.location.lat();
   float longitude = gps.location.lng();
-  float speed = gps.speed.mps();
-  float course = gps.course.deg();
+  float speed = gps.speed.isValid() ? gps.speed.mps() : 0.0;
+  float course = gps.course.isValid() ? gps.course.deg() : 0.0;
   
   HC12_SERIAL.print("GPS:");
   HC12_SERIAL.print(latitude, 6);
@@ -96,7 +141,11 @@ void sendGPSData() {
   DEBUG_PRINT("GPS: ");
   DEBUG_PRINT(latitude, 6);
   DEBUG_PRINT(", ");
-  DEBUG_PRINTLN(longitude, 6);
+  DEBUG_PRINT(longitude, 6);
+  DEBUG_PRINT(", Speed: ");
+  DEBUG_PRINT(speed, 2);
+  DEBUG_PRINT(" m/s, Course: ");
+  DEBUG_PRINTLN(course, 2);
 }
 
 void parseMotorCommand(String command) {
@@ -104,39 +153,70 @@ void parseMotorCommand(String command) {
   if (commaIndex != -1) {
     currentCommand.leftPWM = command.substring(4, commaIndex).toInt();
     currentCommand.rightPWM = command.substring(commaIndex + 1).toInt();
+    
+    // Apply deadzone
+    if (abs(currentCommand.leftPWM) < PWM_DEADZONE) currentCommand.leftPWM = 0;
+    if (abs(currentCommand.rightPWM) < PWM_DEADZONE) currentCommand.rightPWM = 0;
   }
 }
 
 void executeMotorCommand() {
+  // Debug output first
+  DEBUG_PRINT("Executing: L=");
+  DEBUG_PRINT(currentCommand.leftPWM);
+  DEBUG_PRINT(" R=");
+  DEBUG_PRINTLN(currentCommand.rightPWM);
+
   // Left motor
   if (currentCommand.leftPWM > 0) {
-    digitalWrite(motorPin1, HIGH);
-    digitalWrite(motorPin2, LOW);
-  } else if (currentCommand.leftPWM < 0) {
+    DEBUG_PRINTLN("Left motor FORWARD");
     digitalWrite(motorPin1, LOW);
     digitalWrite(motorPin2, HIGH);
-  } else {
-    digitalWrite(motorPin1, LOW);
+  } else if (currentCommand.leftPWM < 0) {
+    DEBUG_PRINTLN("Left motor REVERSE");
+    digitalWrite(motorPin1, HIGH);
     digitalWrite(motorPin2, LOW);
+  } else {
+    DEBUG_PRINTLN("Left motor BRAKE");
+    digitalWrite(motorPin1, HIGH);
+    digitalWrite(motorPin2, HIGH);
   }
-  
-  // Right motor
+
+  // Right motor (same logic)
   if (currentCommand.rightPWM > 0) {
-    digitalWrite(motorPin3, HIGH);
-    digitalWrite(motorPin4, LOW);
-  } else if (currentCommand.rightPWM < 0) {
     digitalWrite(motorPin3, LOW);
     digitalWrite(motorPin4, HIGH);
-  } else {
-    digitalWrite(motorPin3, LOW);
+  } else if (currentCommand.rightPWM < 0) {
+    digitalWrite(motorPin3, HIGH);
     digitalWrite(motorPin4, LOW);
+  } else {
+    digitalWrite(motorPin3, HIGH);
+    digitalWrite(motorPin4, HIGH);
   }
+
+  // Convert % to PWM value (0-255)
+  int leftPWM = map(abs(currentCommand.leftPWM), 0, 100, 0, 255);
+  int rightPWM = map(abs(currentCommand.rightPWM), 0, 100, 0, 255);
   
-  analogWrite(ENA, constrain(abs(currentCommand.leftPWM) * 2.55, 0, 255));
-  analogWrite(ENB, constrain(abs(currentCommand.rightPWM) * 2.55, 0, 255));
+  analogWrite(ENA, leftPWM);
+  analogWrite(ENB, rightPWM);
+
+  DEBUG_PRINT("Final PWM: L=");
+  DEBUG_PRINT(leftPWM);
+  DEBUG_PRINT(" R=");
+  DEBUG_PRINTLN(rightPWM);
+}
+
+void stopMotors() {
+  // Set motor pins to low to stop the motors
+  digitalWrite(motorPin1, LOW);
+  digitalWrite(motorPin2, LOW);
+  digitalWrite(motorPin3, LOW);
+  digitalWrite(motorPin4, LOW);
+
+  // Set the PWM signals to 0 (turn off the motor drivers)
+  analogWrite(ENA, 0);
+  analogWrite(ENB, 0);
   
-  DEBUG_PRINT("Motors: L=");
-  DEBUG_PRINT(currentCommand.leftPWM);
-  DEBUG_PRINT(", R=");
-  DEBUG_PRINTLN(currentCommand.rightPWM);
+  DEBUG_PRINTLN("Motors stopped");
 }
