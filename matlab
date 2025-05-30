@@ -360,87 +360,92 @@ classdef PathFollowingRobot < handle
             lon = waypoints(:,2);
         end
         
-        function plotPerformance(obj)
-            if height(obj.LogData) < 2
-                disp('Not enough data to plot performance');
-                return;
-            end
-            
-            if isempty(obj.PerformanceFigure) || ~isvalid(obj.PerformanceFigure)
-                obj.PerformanceFigure = figure('Name', 'Performance Analysis', 'NumberTitle', 'off');
-            else
-                figure(obj.PerformanceFigure);
-                clf;
-            end
-            
-            elapsedTime = seconds(obj.LogData.Timestamp - obj.LogData.Timestamp(1));
-            
-            % Plot 1: Cross-track and Heading errors
-            subplot(3,2,[1,3]);
-            yyaxis left;
-            plot(elapsedTime, obj.LogData.CrossTrackError, 'r-', 'DisplayName', 'Cross-track Error (m)');
-            ylabel('Cross-track Error (m)');
-            
-            yyaxis right;
-            plot(elapsedTime, obj.LogData.HeadingError, 'b-', 'DisplayName', 'Heading Error (deg)');
-            ylabel('Heading Error (deg)');
-            xlabel('Elapsed Time (s)');
-            title('Navigation Errors');
-            legend;
-            grid on;
-            
-            % Plot 2: Distance to Target
-            subplot(3,2,2);
-            plot(elapsedTime, obj.LogData.DistanceToTarget, 'm-');
-            ylabel('Distance (m)');
-            title('Distance to Target');
-            grid on;
-            
-            % Plot 3: Motor Commands
-            subplot(3,2,4);
-            plot(elapsedTime, obj.LogData.LeftPWM, 'b-', 'DisplayName', 'Left PWM');
-            hold on;
-            plot(elapsedTime, obj.LogData.RightPWM, 'r-', 'DisplayName', 'Right PWM');
-            ylabel('PWM Value');
-            title('Motor Commands');
-            legend;
-            grid on;
-            
-            % Plot 4: Heading vs Path Bearing
-            subplot(3,2,6);
-            plot(elapsedTime, obj.LogData.Heading, 'b-', 'DisplayName', 'Robot Heading');
-            hold on;
-            plot(elapsedTime, obj.LogData.PathBearing, 'r-', 'DisplayName', 'Path Bearing');
-            ylabel('Degrees');
-            xlabel('Elapsed Time (s)');
-            title('Heading vs Path Bearing');
-            legend;
-            grid on;
-            
-            % Calculate metrics
-            totalTime = elapsedTime(end);
-            avgSpeed = mean(obj.LogData.Speed);
-            maxSpeed = max(obj.LogData.Speed);
-            
-            latDiff = diff(obj.LogData.Latitude) * 111320;
-            lonDiff = diff(obj.LogData.Longitude) * 111320 * cosd(mean(obj.LogData.Latitude));
-            distanceTraveled = sum(sqrt(latDiff.^2 + lonDiff.^2));
-            
-            avgCrossTrackError = mean(abs(obj.LogData.CrossTrackError));
-            maxCrossTrackError = max(abs(obj.LogData.CrossTrackError));
-            avgHeadingError = mean(abs(obj.LogData.HeadingError));
-            
-            annotation('textbox', [0.15, 0.85, 0.7, 0.1], 'String', ...
-                sprintf(['Total Time: %.1f s | Distance Traveled: %.1f m\n', ...
-                        'Avg Speed: %.2f m/s | Max Speed: %.2f m/s\n', ...
-                        'Avg Cross-track Error: %.2f m | Max: %.2f m\n', ...
-                        'Avg Heading Error: %.1f°'], ...
-                totalTime, distanceTraveled, avgSpeed, maxSpeed, ...
-                avgCrossTrackError, maxCrossTrackError, avgHeadingError), ...
-                'EdgeColor', 'none', 'FontSize', 10, 'BackgroundColor', 'white');
-            
-            saveas(obj.PerformanceFigure, strrep(obj.LogFile, '.csv', '_performance.png'));
-        end
+   function plotPerformance(obj)
+    if height(obj.LogData) < 2
+        disp('Not enough data to plot performance');
+        return;
+    end
+    
+    if isempty(obj.PerformanceFigure) || ~isvalid(obj.PerformanceFigure)
+        obj.PerformanceFigure = figure('Name', 'Performance Analysis', 'NumberTitle', 'off');
+    else
+        figure(obj.PerformanceFigure);
+        clf;
+    end
+    
+    elapsedTime = seconds(obj.LogData.Timestamp - obj.LogData.Timestamp(1));
+    
+    % Plot 1: Cross-track and Heading errors
+    subplot(4,2,[1,3]);
+    yyaxis left;
+    plot(elapsedTime, obj.LogData.CrossTrackError, 'r-', 'DisplayName', 'Cross-track Error (m)');
+    ylabel('Cross-track Error (m)');
+    
+    yyaxis right;
+    plot(elapsedTime, obj.LogData.HeadingError, 'b-', 'DisplayName', 'Heading Error (deg)');
+    ylabel('Heading Error (deg)');
+    title('Navigation Errors');
+    legend;
+    grid on;
+    
+    % Plot 2: Distance to Target
+    subplot(4,2,2);
+    plot(elapsedTime, obj.LogData.DistanceToTarget, 'm-');
+    ylabel('Distance (m)');
+    title('Distance to Target');
+    grid on;
+    
+    % Plot 3: Motor Commands
+    subplot(4,2,4);
+    plot(elapsedTime, obj.LogData.LeftPWM, 'b-', 'DisplayName', 'Left PWM');
+    hold on;
+    plot(elapsedTime, obj.LogData.RightPWM, 'r-', 'DisplayName', 'Right PWM');
+    ylabel('PWM Value');
+    title('Motor Commands');
+    legend;
+    grid on;
+    
+    % Plot 4: Heading vs Path Bearing
+    subplot(4,2,[5,7]);
+    plot(elapsedTime, obj.LogData.Heading, 'b-', 'DisplayName', 'Robot Heading');
+    hold on;
+    plot(elapsedTime, obj.LogData.PathBearing, 'r-', 'DisplayName', 'Path Bearing');
+    ylabel('Degrees');
+    xlabel('Elapsed Time (s)');
+    title('Heading vs Path Bearing');
+    legend;
+    grid on;
+    
+    % Calculate metrics
+    totalTime = elapsedTime(end);
+    avgSpeed = mean(obj.LogData.Speed);
+    maxSpeed = max(obj.LogData.Speed);
+    
+    latDiff = diff(obj.LogData.Latitude) * 111320;
+    lonDiff = diff(obj.LogData.Longitude) * 111320 * cosd(mean(obj.LogData.Latitude));
+    distanceTraveled = sum(sqrt(latDiff.^2 + lonDiff.^2));
+    
+    avgCrossTrackError = mean(abs(obj.LogData.CrossTrackError));
+    maxCrossTrackError = max(abs(obj.LogData.CrossTrackError));
+    avgHeadingError = mean(abs(obj.LogData.HeadingError));
+    
+    % Create a subplot for the metrics text
+    subplot(4,2,[6,8]);
+    axis off;
+    text(0.1, 0.5, ...
+        sprintf(['Total Time: %.1f s\n', ...
+                'Distance Traveled: %.1f m\n', ...
+                'Avg Speed: %.2f m/s\n', ...
+                'Max Speed: %.2f m/s\n', ...
+                'Avg Cross-track Error: %.2f m\n', ...
+                'Max Cross-track Error: %.2f m\n', ...
+                'Avg Heading Error: %.1f°'], ...
+        totalTime, distanceTraveled, avgSpeed, maxSpeed, ...
+        avgCrossTrackError, maxCrossTrackError, avgHeadingError), ...
+        'FontSize', 10);
+    
+    saveas(obj.PerformanceFigure, strrep(obj.LogFile, '.csv', '_performance.png'));
+end
         
         function delete(obj)
             if obj.Running
