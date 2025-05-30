@@ -30,8 +30,6 @@ classdef PathFollowingRobot < handle
             
             % Load waypoints (example coordinates)
             obj.Waypoints = [
-            7.214902400, 124.249251024;  % ~2m
-            7.214903600, 124.249261036;  % ~2m
             7.214904800, 124.249271048;  % ~2m
             7.214906000, 124.249281060;  % ~2m
             7.214907200, 124.249291072;  % ~2m
