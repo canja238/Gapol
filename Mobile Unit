@@ -15,21 +15,23 @@ TinyGPSPlus gps;
 #define GPS_SERIAL Serial1
 #define HC12_SERIAL Serial3
 
-const int ENA = 12;
-const int ENB = 13;
-const int motorPin1 = 8;
-const int motorPin2 = 9;
-const int motorPin3 = 11;
-const int motorPin4 = 10;
+// Motor control pins
+const int ENA = 12;  // Left motor PWM
+const int ENB = 13;  // Right motor PWM
+const int motorPin1 = 8;  // Left motor direction 1
+const int motorPin2 = 9;  // Left motor direction 2
+const int motorPin3 = 11; // Right motor direction 1
+const int motorPin4 = 10; // Right motor direction 2
 
 struct MotorCommand {
   int leftPWM;
   int rightPWM;
 };
+
 MotorCommand currentCommand = {0, 0};
 unsigned long lastCommandTime = 0;
 const unsigned long COMMAND_TIMEOUT = 2000; // 2 seconds
-const unsigned long GPS_TIMEOUT = 5000; // 5 seconds without GPS signal
+const unsigned long GPS_TIMEOUT = 5000;     // 5 seconds without GPS signal
 unsigned long lastValidGPS = 0;
 const int PWM_DEADZONE = 10; // Ignore PWM values below this threshold
 
@@ -41,6 +43,7 @@ void setup() {
   GPS_SERIAL.begin(9600);
   HC12_SERIAL.begin(9600);
   
+  // Set motor control pins as outputs
   pinMode(ENA, OUTPUT);
   pinMode(ENB, OUTPUT);
   pinMode(motorPin1, OUTPUT);
@@ -51,11 +54,11 @@ void setup() {
   // Initialize motors in stopped state
   stopMotors();
   
-  DEBUG_PRINTLN("Robot Initialized");
+  DEBUG_PRINTLN("Robot Controller Initialized");
 }
 
 void loop() {
-  // Read GPS data
+  // Read and process GPS data
   bool gpsUpdated = false;
   while (GPS_SERIAL.available() > 0) {
     if (gps.encode(GPS_SERIAL.read())) {
@@ -78,7 +81,7 @@ void loop() {
     HC12_SERIAL.println("GPS:LOST");
   }
   
-  // Check for incoming commands
+  // Process incoming commands
   if (HC12_SERIAL.available() > 0) {
     String command = HC12_SERIAL.readStringUntil('\n');
     command.trim();
@@ -161,28 +164,24 @@ void parseMotorCommand(String command) {
 }
 
 void executeMotorCommand() {
-  // Debug output first
   DEBUG_PRINT("Executing: L=");
   DEBUG_PRINT(currentCommand.leftPWM);
   DEBUG_PRINT(" R=");
   DEBUG_PRINTLN(currentCommand.rightPWM);
 
-  // Left motor
+  // Left motor control
   if (currentCommand.leftPWM > 0) {
-    DEBUG_PRINTLN("Left motor FORWARD");
     digitalWrite(motorPin1, LOW);
     digitalWrite(motorPin2, HIGH);
   } else if (currentCommand.leftPWM < 0) {
-    DEBUG_PRINTLN("Left motor REVERSE");
     digitalWrite(motorPin1, HIGH);
     digitalWrite(motorPin2, LOW);
   } else {
-    DEBUG_PRINTLN("Left motor BRAKE");
-    digitalWrite(motorPin1, HIGH);
-    digitalWrite(motorPin2, HIGH);
+    digitalWrite(motorPin1, LOW);
+    digitalWrite(motorPin2, LOW);
   }
 
-  // Right motor (same logic)
+  // Right motor control
   if (currentCommand.rightPWM > 0) {
     digitalWrite(motorPin3, LOW);
     digitalWrite(motorPin4, HIGH);
@@ -190,8 +189,8 @@ void executeMotorCommand() {
     digitalWrite(motorPin3, HIGH);
     digitalWrite(motorPin4, LOW);
   } else {
-    digitalWrite(motorPin3, HIGH);
-    digitalWrite(motorPin4, HIGH);
+    digitalWrite(motorPin3, LOW);
+    digitalWrite(motorPin4, LOW);
   }
 
   // Convert % to PWM value (0-255)
@@ -200,23 +199,13 @@ void executeMotorCommand() {
   
   analogWrite(ENA, leftPWM);
   analogWrite(ENB, rightPWM);
-
-  DEBUG_PRINT("Final PWM: L=");
-  DEBUG_PRINT(leftPWM);
-  DEBUG_PRINT(" R=");
-  DEBUG_PRINTLN(rightPWM);
 }
 
 void stopMotors() {
-  // Set motor pins to low to stop the motors
   digitalWrite(motorPin1, LOW);
   digitalWrite(motorPin2, LOW);
   digitalWrite(motorPin3, LOW);
   digitalWrite(motorPin4, LOW);
-
-  // Set the PWM signals to 0 (turn off the motor drivers)
   analogWrite(ENA, 0);
   analogWrite(ENB, 0);
-  
-  DEBUG_PRINTLN("Motors stopped");
 }
