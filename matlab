@@ -30,9 +30,49 @@ classdef PathFollowingRobot < handle
             
             % Load waypoints (example coordinates)
             obj.Waypoints = [
-                7.214721, 124.248377;
-                7.214782, 124.248421;
-                % Add more waypoints as needed
+            7.214902400, 124.249251024;  % ~2m
+            7.214903600, 124.249261036;  % ~2m
+            7.214904800, 124.249271048;  % ~2m
+            7.214906000, 124.249281060;  % ~2m
+            7.214907200, 124.249291072;  % ~2m
+            7.214908400, 124.249301084;  % ~2m
+            7.214909600, 124.249311096;  % ~2m
+            7.214910800, 124.249321108;  % ~2m
+            7.214912000, 124.249331120;  % ~2m
+            7.214913200, 124.249341132;  % ~2m
+            7.214914400, 124.249351144;  % ~2m
+            7.214915600, 124.249361156;  % ~2m
+            7.214916800, 124.249371168;  % ~2m
+            7.214918000, 124.249381180;  % ~2m
+            7.214919200, 124.249391192;  % ~2m
+            7.214920400, 124.249401204;  % ~2m
+            7.214921600, 124.249411216;  % ~2m
+            7.214922800, 124.249421228;  % ~2m
+            7.214924000, 124.249431240;  % ~2m
+            7.214925200, 124.249441252;  % ~2m
+            7.214926400, 124.249451264;  % ~2m
+            7.214927600, 124.249461276;  % ~2m
+            7.214928800, 124.249471288;  % ~2m
+            7.214930000, 124.249481300;  % ~2m
+            7.214931200, 124.249491312;  % +2m
+            7.214932400, 124.249501324;  % +2m
+            7.214933600, 124.249511336;  % +2m
+            7.214934800, 124.249521348;  % +2m
+            7.214936000, 124.249531360;  % +2m
+            7.214937200, 124.249541372;  % +2m
+            7.214938400, 124.249551384;  % +2m
+            7.214939600, 124.249561396;  % +2m
+            7.214940800, 124.249571408;  % +2m
+            7.214942000, 124.249581420;  % +2m
+            7.214943200, 124.249591432;  % +2m
+            7.214944400, 124.249601444;  % +2m
+            7.214945600, 124.249611456;  % +2m
+            7.214946800, 124.249621468;  % +2m
+            7.214948000, 124.249631480;  % +2m
+            7.214949200, 124.249641492;  % +2m
+            7.214950400, 124.249651504;  % +2m
+            7.214951600, 124.249661516;  % +2m
+            7.214952800, 124.249671528
             ];
             
             obj.CurrentWaypointIndex = 1;
@@ -322,92 +362,87 @@ classdef PathFollowingRobot < handle
             lon = waypoints(:,2);
         end
         
-     function plotPerformance(obj)
-    if height(obj.LogData) < 2
-        disp('Not enough data to plot performance');
-        return;
-    end
-    
-    if isempty(obj.PerformanceFigure) || ~isvalid(obj.PerformanceFigure)
-        obj.PerformanceFigure = figure('Name', 'Performance Analysis', 'NumberTitle', 'off');
-    else
-        figure(obj.PerformanceFigure);
-        clf;
-    end
-    
-    elapsedTime = seconds(obj.LogData.Timestamp - obj.LogData.Timestamp(1));
-    
-    % Plot 1: Cross-track and Heading errors
-    subplot(4,2,[1,3]);
-    yyaxis left;
-    plot(elapsedTime, obj.LogData.CrossTrackError, 'r-', 'DisplayName', 'Cross-track Error (m)');
-    ylabel('Cross-track Error (m)');
-    
-    yyaxis right;
-    plot(elapsedTime, obj.LogData.HeadingError, 'b-', 'DisplayName', 'Heading Error (deg)');
-    ylabel('Heading Error (deg)');
-    title('Navigation Errors');
-    legend;
-    grid on;
-    
-    % Plot 2: Distance to Target
-    subplot(4,2,2);
-    plot(elapsedTime, obj.LogData.DistanceToTarget, 'm-');
-    ylabel('Distance (m)');
-    title('Distance to Target');
-    grid on;
-    
-    % Plot 3: Motor Commands
-    subplot(4,2,4);
-    plot(elapsedTime, obj.LogData.LeftPWM, 'b-', 'DisplayName', 'Left PWM');
-    hold on;
-    plot(elapsedTime, obj.LogData.RightPWM, 'r-', 'DisplayName', 'Right PWM');
-    ylabel('PWM Value');
-    title('Motor Commands');
-    legend;
-    grid on;
-    
-    % Plot 4: Heading vs Path Bearing
-    subplot(4,2,[5,7]);
-    plot(elapsedTime, obj.LogData.Heading, 'b-', 'DisplayName', 'Robot Heading');
-    hold on;
-    plot(elapsedTime, obj.LogData.PathBearing, 'r-', 'DisplayName', 'Path Bearing');
-    ylabel('Degrees');
-    xlabel('Elapsed Time (s)');
-    title('Heading vs Path Bearing');
-    legend;
-    grid on;
-    
-    % Calculate metrics
-    totalTime = elapsedTime(end);
-    avgSpeed = mean(obj.LogData.Speed);
-    maxSpeed = max(obj.LogData.Speed);
-    
-    latDiff = diff(obj.LogData.Latitude) * 111320;
-    lonDiff = diff(obj.LogData.Longitude) * 111320 * cosd(mean(obj.LogData.Latitude));
-    distanceTraveled = sum(sqrt(latDiff.^2 + lonDiff.^2));
-    
-    avgCrossTrackError = mean(abs(obj.LogData.CrossTrackError));
-    maxCrossTrackError = max(abs(obj.LogData.CrossTrackError));
-    avgHeadingError = mean(abs(obj.LogData.HeadingError));
-    
-    % Create a subplot for the metrics text
-    subplot(4,2,[6,8]);
-    axis off;
-    text(0, 0.5, ...
-        sprintf(['Total Time: %.1f s\n', ...
-                'Distance Traveled: %.1f m\n', ...
-                'Avg Speed: %.2f m/s\n', ...
-                'Max Speed: %.2f m/s\n', ...
-                'Avg Cross-track Error: %.2f m\n', ...
-                'Max Cross-track Error: %.2f m\n', ...
-                'Avg Heading Error: %.1f°'], ...
-        totalTime, distanceTraveled, avgSpeed, maxSpeed, ...
-        avgCrossTrackError, maxCrossTrackError, avgHeadingError), ...
-        'FontSize', 10);
-    
-    saveas(obj.PerformanceFigure, strrep(obj.LogFile, '.csv', '_performance.png'));
-end
+        function plotPerformance(obj)
+            if height(obj.LogData) < 2
+                disp('Not enough data to plot performance');
+                return;
+            end
+            
+            if isempty(obj.PerformanceFigure) || ~isvalid(obj.PerformanceFigure)
+                obj.PerformanceFigure = figure('Name', 'Performance Analysis', 'NumberTitle', 'off');
+            else
+                figure(obj.PerformanceFigure);
+                clf;
+            end
+            
+            elapsedTime = seconds(obj.LogData.Timestamp - obj.LogData.Timestamp(1));
+            
+            % Plot 1: Cross-track and Heading errors
+            subplot(3,2,[1,3]);
+            yyaxis left;
+            plot(elapsedTime, obj.LogData.CrossTrackError, 'r-', 'DisplayName', 'Cross-track Error (m)');
+            ylabel('Cross-track Error (m)');
+            
+            yyaxis right;
+            plot(elapsedTime, obj.LogData.HeadingError, 'b-', 'DisplayName', 'Heading Error (deg)');
+            ylabel('Heading Error (deg)');
+            xlabel('Elapsed Time (s)');
+            title('Navigation Errors');
+            legend;
+            grid on;
+            
+            % Plot 2: Distance to Target
+            subplot(3,2,2);
+            plot(elapsedTime, obj.LogData.DistanceToTarget, 'm-');
+            ylabel('Distance (m)');
+            title('Distance to Target');
+            grid on;
+            
+            % Plot 3: Motor Commands
+            subplot(3,2,4);
+            plot(elapsedTime, obj.LogData.LeftPWM, 'b-', 'DisplayName', 'Left PWM');
+            hold on;
+            plot(elapsedTime, obj.LogData.RightPWM, 'r-', 'DisplayName', 'Right PWM');
+            ylabel('PWM Value');
+            title('Motor Commands');
+            legend;
+            grid on;
+            
+            % Plot 4: Heading vs Path Bearing
+            subplot(3,2,6);
+            plot(elapsedTime, obj.LogData.Heading, 'b-', 'DisplayName', 'Robot Heading');
+            hold on;
+            plot(elapsedTime, obj.LogData.PathBearing, 'r-', 'DisplayName', 'Path Bearing');
+            ylabel('Degrees');
+            xlabel('Elapsed Time (s)');
+            title('Heading vs Path Bearing');
+            legend;
+            grid on;
+            
+            % Calculate metrics
+            totalTime = elapsedTime(end);
+            avgSpeed = mean(obj.LogData.Speed);
+            maxSpeed = max(obj.LogData.Speed);
+            
+            latDiff = diff(obj.LogData.Latitude) * 111320;
+            lonDiff = diff(obj.LogData.Longitude) * 111320 * cosd(mean(obj.LogData.Latitude));
+            distanceTraveled = sum(sqrt(latDiff.^2 + lonDiff.^2));
+            
+            avgCrossTrackError = mean(abs(obj.LogData.CrossTrackError));
+            maxCrossTrackError = max(abs(obj.LogData.CrossTrackError));
+            avgHeadingError = mean(abs(obj.LogData.HeadingError));
+            
+            annotation('textbox', [0.15, 0.85, 0.7, 0.1], 'String', ...
+                sprintf(['Total Time: %.1f s | Distance Traveled: %.1f m\n', ...
+                        'Avg Speed: %.2f m/s | Max Speed: %.2f m/s\n', ...
+                        'Avg Cross-track Error: %.2f m | Max: %.2f m\n', ...
+                        'Avg Heading Error: %.1f°'], ...
+                totalTime, distanceTraveled, avgSpeed, maxSpeed, ...
+                avgCrossTrackError, maxCrossTrackError, avgHeadingError), ...
+                'EdgeColor', 'none', 'FontSize', 10, 'BackgroundColor', 'white');
+            
+            saveas(obj.PerformanceFigure, strrep(obj.LogFile, '.csv', '_performance.png'));
+        end
         
         function delete(obj)
             if obj.Running
